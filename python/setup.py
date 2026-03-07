@@ -28,6 +28,6 @@ extension = Extension(name='_mpidplugin',
 
 setup(name='mpidplugin',
       version='1.0',
-      py_modules=['mpidplugin'],
+      py_modules=['mpidplugin', 'dispersion_pme_bridge'],
       ext_modules=[extension],
      )

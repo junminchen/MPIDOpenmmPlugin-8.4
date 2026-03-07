@@ -23,3 +23,9 @@ arbitrarily chosen polarizability settings assigned to the heavy atoms. The
 `run_ethane.py` example runs a short trajectory of this system, while the
 `alchemy_example.py` file demonstrates how to make alchemical changes to the
 ethane molecule to allow it to disappear in the water box.
+
+dispersion_pme
+---------------------------------
+A minimal Python entry point for evaluating the DMFF `ADMPDispPmeForce` term
+on an OpenMM frame through `python/dispersion_pme_bridge.py`. This is intended
+as a reference-energy path for dispersion PME validation workflows.

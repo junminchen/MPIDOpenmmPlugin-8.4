@@ -54,6 +54,37 @@ If OpenMM cannot find plugin shared libraries at runtime, export:
 export OPENMM_PLUGIN_DIR=$CONDA_PREFIX/lib/plugins
 ```
 
+# Python Packaging Notes
+
+The OpenMM 8.4 build now installs both:
+
+- `mpidplugin`
+- `dispersion_pme_bridge`
+
+The second module provides a Python-side bridge to DMFF's
+`ADMPDispPmeForce`, which is useful for term-by-term dispersion PME
+validation against DMFF reference energies.
+
+# Dispersion PME Status
+
+This repository currently contains the Python packaging needed for a DMFF
+dispersion PME reference path:
+
+- `python/dispersion_pme_bridge.py` exposes a `DispersionPMEBridgeModel`
+- `examples/dispersion_pme/` contains a minimal single-frame evaluator
+
+Current scope:
+
+- OpenMM 8.4 build support is in place
+- the bridge forwards `ethresh` into DMFF potential construction
+- `pmax` is still controlled by the DMFF force definition
+
+Current limitation:
+
+- exact native MPID dispersion PME parity with DMFF is still under active
+  validation, so this repository should not yet be treated as claiming
+  bitwise or exact-energy agreement with DMFF for every case
+
 # Documentation
 
 The user manual describing usage and technical aspects of the code can be found

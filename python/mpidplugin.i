@@ -590,6 +590,10 @@ public:
 %pythoncode %{
 import openmm.app.forcefield as forcefield
 import warnings
+try:
+    from dispersion_pme_bridge import DispersionPMEBridgeModel
+except Exception:
+    DispersionPMEBridgeModel = None
 
 ## @private
 class MPIDGenerator(object):
