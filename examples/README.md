@@ -29,3 +29,10 @@ dispersion_pme
 A minimal Python entry point for evaluating the DMFF `ADMPDispPmeForce` term
 on an OpenMM frame through `python/dispersion_pme_bridge.py`. This is intended
 as a reference-energy path for dispersion PME validation workflows.
+
+slater_custom_nonbonded
+---------------------------------
+A self-contained example that reproduces the DMFF short-range custom terms with
+OpenMM `CustomNonbondedForce`, including `QqTtDampingForce`, exchange,
+short-range electrostatics, short-range polarization, short-range dispersion,
+DHF, and Slater dispersion damping.
