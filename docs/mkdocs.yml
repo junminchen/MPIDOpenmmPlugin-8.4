@@ -13,6 +13,7 @@ nav:
     - Installation: building.md
     - Running the Code: running.md
     - Technical Details: technical.md
+    - DMFF Integration Dev: dmff_integration_dev.md
     - Contributing: contributing.md
     - License: license.md
     - Authors: authors.md
