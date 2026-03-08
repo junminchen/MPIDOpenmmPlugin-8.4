@@ -68,7 +68,7 @@ void loadCovalentMap(const SerializationNode& map, std::vector< int >& covalentM
 }
 
 void MPIDForceProxy::serialize(const void* object, SerializationNode& node) const {
-    node.setIntProperty("version", 1);
+    node.setIntProperty("version", 2);
     const MPIDForce& force = *reinterpret_cast<const MPIDForce*>(object);
 
     node.setIntProperty("forceGroup", force.getForceGroup());
@@ -103,6 +103,23 @@ void MPIDForceProxy::serialize(const void* object, SerializationNode& node) cons
     node.setDoubleProperty("dScale14", dScales[2]);
     node.setDoubleProperty("dScale15", dScales[3]);
     node.setDoubleProperty("dScale16", dScales[4]);
+
+    // Dispersion PME parameters
+    node.setBoolProperty("useDispersionPME", force.getUseDispersionPME());
+    node.setIntProperty("dispersionPmax", force.getDispersionPmax());
+    double alphaDisp;
+    int dnx, dny, dnz;
+    force.getDPMEParameters(alphaDisp, dnx, dny, dnz);
+    node.setDoubleProperty("alphaDispersionEwald", alphaDisp);
+    SerializationNode& dispGridNode = node.createChildNode("DispersionGridDimension");
+    dispGridNode.setIntProperty("d0", dnx).setIntProperty("d1", dny).setIntProperty("d2", dnz);
+    vector<double> dispMScales;
+    force.getDispMScales(dispMScales);
+    node.setDoubleProperty("dispMScale12", dispMScales[0]);
+    node.setDoubleProperty("dispMScale13", dispMScales[1]);
+    node.setDoubleProperty("dispMScale14", dispMScales[2]);
+    node.setDoubleProperty("dispMScale15", dispMScales[3]);
+    node.setDoubleProperty("dispMScale16", dispMScales[4]);
 
     SerializationNode& gridDimensionsNode  = node.createChildNode("MultipoleParticleGridDimension");
     gridDimensionsNode.setIntProperty("d0", nx).setIntProperty("d1", ny).setIntProperty("d2", nz); 
@@ -160,6 +177,13 @@ void MPIDForceProxy::serialize(const void* object, SerializationNode& node) cons
         octopole.setDoubleProperty("oYZZ", molecularOctopole[8]);
         octopole.setDoubleProperty("oZZZ", molecularOctopole[9]);
 
+        double c6, c8, c10;
+        force.getDispersionParameters(ii, c6, c8, c10);
+        SerializationNode& dispersion = particle.createChildNode("Dispersion");
+        dispersion.setDoubleProperty("C6", c6);
+        dispersion.setDoubleProperty("C8", c8);
+        dispersion.setDoubleProperty("C10", c10);
+
         for (unsigned int jj = 0; jj < covalentTypes.size(); jj++) {
             std::vector< int > covalentMap;
             force.getCovalentMap(ii, static_cast<MPIDForce::CovalentType>(jj), covalentMap);
@@ -170,7 +194,7 @@ void MPIDForceProxy::serialize(const void* object, SerializationNode& node) cons
 
 void* MPIDForceProxy::deserialize(const SerializationNode& node) const {
     int version = node.getIntProperty("version");
-    if (version < 0 || version > 1)
+    if (version < 0 || version > 2)
         throw OpenMMException("Unsupported version number");
     MPIDForce* force = new MPIDForce();
 
@@ -205,6 +229,24 @@ void* MPIDForceProxy::deserialize(const SerializationNode& node) const {
             force->setMScales(mScales);
             force->setPScales(pScales);
             force->setDScales(dScales);
+        }
+
+        // Dispersion PME parameters (version >= 2)
+        if (version >= 2) {
+            force->setUseDispersionPME(node.getBoolProperty("useDispersionPME"));
+            force->setDispersionPmax(node.getIntProperty("dispersionPmax"));
+            const SerializationNode& dispGridNode = node.getChildNode("DispersionGridDimension");
+            force->setDPMEParameters(node.getDoubleProperty("alphaDispersionEwald"),
+                                     dispGridNode.getIntProperty("d0"),
+                                     dispGridNode.getIntProperty("d1"),
+                                     dispGridNode.getIntProperty("d2"));
+            vector<double> dispMScales(5);
+            dispMScales[0] = node.getDoubleProperty("dispMScale12");
+            dispMScales[1] = node.getDoubleProperty("dispMScale13");
+            dispMScales[2] = node.getDoubleProperty("dispMScale14");
+            dispMScales[3] = node.getDoubleProperty("dispMScale15");
+            dispMScales[4] = node.getDoubleProperty("dispMScale16");
+            force->setDispMScales(dispMScales);
         }
 
         const SerializationNode& gridDimensionsNode  = node.getChildNode("MultipoleParticleGridDimension");
@@ -266,6 +308,15 @@ void* MPIDForceProxy::deserialize(const SerializationNode& node) const {
                                 particle.getIntProperty("multipoleAtomY"),
                                 particle.getDoubleProperty("thole"),
                                 polarizability);
+
+            // Dispersion parameters (version >= 2)
+            if (version >= 2) {
+                const SerializationNode& dispersion = particle.getChildNode("Dispersion");
+                force->setDispersionParameters(ii,
+                    dispersion.getDoubleProperty("C6"),
+                    dispersion.getDoubleProperty("C8"),
+                    dispersion.getDoubleProperty("C10"));
+            }
 
             // covalent maps 
 

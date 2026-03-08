@@ -458,6 +458,81 @@ public:
     void getDScales(std::vector<double>& scales) const;
     %clear std::vector<double>& scales;
 
+    // ---- Dispersion PME API ------------------------------------------------
+
+    /**
+     * Get the number of particles with dispersion parameters.
+     */
+    int getNumDispersionParameters() const;
+
+    /**
+     * Set dispersion C6/C8/C10 susceptibility parameters for a particle.
+     */
+    void setDispersionParameters(int index, double c6, double c8, double c10);
+
+    /**
+     * Get dispersion C6/C8/C10 susceptibility parameters for a particle.
+     */
+    %apply double& OUTPUT { double& c6 };
+    %apply double& OUTPUT { double& c8 };
+    %apply double& OUTPUT { double& c10 };
+    void getDispersionParameters(int index, double& c6, double& c8, double& c10) const;
+    %clear double& c6;
+    %clear double& c8;
+    %clear double& c10;
+
+    /**
+     * Enable or disable dispersion PME.
+     */
+    void setUseDispersionPME(bool use);
+
+    /**
+     * Query whether dispersion PME is active.
+     */
+    bool getUseDispersionPME() const;
+
+    /**
+     * Set the maximum order of the dispersion expansion (6, 8, or 10).
+     */
+    void setDispersionPmax(int pmax);
+
+    /**
+     * Get the maximum order of the dispersion expansion.
+     */
+    int getDispersionPmax() const;
+
+    /**
+     * Set the Ewald parameters for dispersion PME.
+     */
+    void setDPMEParameters(double alpha, int dnx, int dny, int dnz);
+
+    /**
+     * Get the Ewald parameters for dispersion PME.
+     */
+    %apply double& OUTPUT { double& alpha };
+    %apply int& OUTPUT { int& dnx };
+    %apply int& OUTPUT { int& dny };
+    %apply int& OUTPUT { int& dnz };
+    void getDPMEParameters(double& alpha, int& dnx, int& dny, int& dnz) const;
+    %clear double& alpha;
+    %clear int& dnx;
+    %clear int& dny;
+    %clear int& dnz;
+
+    /**
+     * Set topological scaling factors for dispersion (1-2 through 1-6+).
+     */
+    void setDispMScales(const std::vector<double>& scales);
+
+    /**
+     * Get topological scaling factors for dispersion.
+     */
+    %apply std::vector<double>& OUTPUT { std::vector<double>& scales };
+    void getDispMScales(std::vector<double>& scales) const;
+    %clear std::vector<double>& scales;
+
+    // ---- End Dispersion PME API --------------------------------------------
+
     /**
      * Set the coefficients for the mu_0, mu_1, mu_2, ..., mu_n terms in the extrapolation
      * algorithm for induced dipoles.
@@ -615,6 +690,11 @@ class MPIDGenerator(object):
         self.pScales = pScales
         self.dScales = dScales
         self.typeMap = {}
+        # Dispersion PME state
+        self.useDispersionPME = False
+        self.dispersionPmax = 10
+        self.dispMScales = None
+        self.dispersionMap = {}  # type/class -> {C6, C8, C10}
 
     #=============================================================================================
     # Set axis type
@@ -728,15 +808,39 @@ class MPIDGenerator(object):
             merge_or_check("pScales", pScales)
             merge_or_check("dScales", dScales)
 
-        # set type map: [ kIndices, multipoles, AMOEBA/OpenMM axis type]
+        # Dispersion PME attributes on <MPIDForce>
+        useDispPME = element.get('useDispersionPME', None)
+        if useDispPME is not None:
+            generator.useDispersionPME = (useDispPME.lower() in ('true', '1', 'yes'))
+        dispPmax = element.get('dispersionPmax', None)
+        if dispPmax is not None:
+            generator.dispersionPmax = int(dispPmax)
+        dispMScales = parse_scales("dispM")
+        if dispMScales is not None:
+            if generator.dispMScales is not None and generator.dispMScales != dispMScales:
+                raise ValueError('Found multiple MPIDForce tags with different dispMScales arguments')
+            generator.dispMScales = dispMScales
 
-        for atom in element.findall('Multipole'):
+        # set type map: [ kIndices, multipoles, AMOEBA/OpenMM axis type]
+        # Support both <Multipole> (MPIDForce) and <Atom> (ADMPPmeForce) children
+        multipole_elements = element.findall('Multipole') + element.findall('Atom')
+
+        for atom in multipole_elements:
             types = forceField._findAtomTypes(atom.attrib, 1)
+            if None in types:
+                # Fallback: try 'class' attribute as 'type' for DMFF compatibility
+                alt_attrib = dict(atom.attrib)
+                if 'class' in alt_attrib and 'type' not in alt_attrib:
+                    alt_attrib['type'] = alt_attrib.pop('class')
+                types = forceField._findAtomTypes(alt_attrib, 1)
             if None not in types:
+
+                # Determine the type/class key used for atom matching
+                typeKey = atom.attrib.get('type', atom.attrib.get('class'))
 
                 # k-indices not provided default to 0
 
-                kIndices = [atom.attrib['type']]
+                kIndices = [typeKey]
 
                 kStrings = [ 'kz', 'kx', 'ky' ]
                 for kString in kStrings:
@@ -784,26 +888,38 @@ class MPIDGenerator(object):
                         generator.typeMap[t] = []
 
                     valueMap = dict()
-                    valueMap['classIndex'] = atom.attrib['type']
+                    valueMap['classIndex'] = typeKey
                     valueMap['kIndices'] = kIndices
                     valueMap['charge'] = charge
                     valueMap['dipole'] = dipole
                     valueMap['quadrupole'] = quadrupole
                     valueMap['octopole'] = octopole
                     valueMap['axisType'] = axisType
+
+                    # Inline dispersion parameters (optional C6/C8/C10 on <Multipole>)
+                    if atom.get('C6') is not None:
+                        valueMap['C6'] = float(atom.get('C6'))
+                        valueMap['C8'] = float(atom.get('C8', 0.0))
+                        valueMap['C10'] = float(atom.get('C10', 0.0))
+
                     generator.typeMap[t].append(valueMap)
 
             else:
-                outputString = "MPIDGenerator: error getting type for multipole: %s" % (atom.attrib['class'])
+                outputString = "MPIDGenerator: error getting type for multipole: %s" % (atom.attrib.get('class', atom.attrib.get('type', '?')))
                 raise ValueError(outputString)
 
         # polarization parameters
 
         for atom in element.findall('Polarize'):
             types = forceField._findAtomTypes(atom.attrib, 1)
+            if None in types:
+                alt_attrib = dict(atom.attrib)
+                if 'class' in alt_attrib and 'type' not in alt_attrib:
+                    alt_attrib['type'] = alt_attrib.pop('class')
+                types = forceField._findAtomTypes(alt_attrib, 1)
             if None not in types:
 
-                classIndex = atom.attrib['type']
+                classIndex = atom.attrib.get('type', atom.attrib.get('class'))
                 polarizability = [ float(atom.attrib['polarizabilityXX']),
                                    float(atom.attrib['polarizabilityYY']),
                                    float(atom.attrib['polarizabilityZZ']) ]
@@ -811,7 +927,7 @@ class MPIDGenerator(object):
 
                 for t in types[0]:
                     if (t not in generator.typeMap):
-                        outputString = "MPIDGenerator: polarize type not present: %s" % (atom.attrib['type'])
+                        outputString = "MPIDGenerator: polarize type not present: %s" % classIndex
                         raise ValueError(outputString)
                     else:
                         typeMapList = generator.typeMap[t]
@@ -825,12 +941,23 @@ class MPIDGenerator(object):
                                 hit = 1
 
                         if (hit == 0):
-                            outputString = "MPIDGenerator: error getting type for polarize: class index=%s not in multipole list?" % (atom.attrib['class'])
+                            outputString = "MPIDGenerator: error getting type for polarize: class index=%s not in multipole list?" % classIndex
                             raise ValueError(outputString)
 
             else:
-                outputString = "MPIDGenerator: error getting type for polarize: %s" % (atom.attrib['class'])
+                outputString = "MPIDGenerator: error getting type for polarize: %s" % (atom.attrib.get('class', atom.attrib.get('type', '?')))
                 raise ValueError(outputString)
+
+        # Dispersion parameters from <Dispersion> sub-elements within <MPIDForce>
+        for atom in element.findall('Dispersion'):
+            typeKey = atom.attrib.get('type', atom.attrib.get('class'))
+            if typeKey is None:
+                raise ValueError("MPIDGenerator: <Dispersion> element must have 'type' or 'class' attribute")
+            generator.dispersionMap[typeKey] = {
+                'C6': float(atom.get('C6', 0.0)),
+                'C8': float(atom.get('C8', 0.0)),
+                'C10': float(atom.get('C10', 0.0)),
+            }
 
     #=============================================================================================
 
@@ -886,6 +1013,14 @@ class MPIDGenerator(object):
         pScales = resolve_scales("p", self.pScales)
         dScales = resolve_scales("d", self.dScales)
         explicitScaleVectors = (mScales is not None or pScales is not None or dScales is not None)
+
+        # MPID CUDA kernel convention: mScales[4] (mScale16) is the DEFAULT
+        # scale for ALL non-bonded pairs (not just 1-6 shell). It MUST be 1.0
+        # for correct physics. DMFF XML uses mScale16 for the 1-6 bonded
+        # shell only, so we override the last element to 1.0.
+        for scales in (mScales, pScales, dScales):
+            if scales is not None and len(scales) == 5:
+                scales[4] = 1.0
 
         if mScales is not None:
             force.setMScales(mScales)
@@ -1191,6 +1326,19 @@ class MPIDGenerator(object):
                         force.setCovalentMap(atomIndex, MPIDForce.Covalent12, tuple(bonded12ParticleSets[atomIndex]))
                         force.setCovalentMap(atomIndex, MPIDForce.Covalent13, tuple(bonded13ParticleSets[atomIndex]))
                         force.setCovalentMap(atomIndex, MPIDForce.Covalent14, tuple(bonded14ParticleSets[atomIndex]))
+
+                        # Set dispersion parameters if available (inline from <Multipole> or from dispersionMap)
+                        classIdx = savedMultipoleDict.get('classIndex', None)
+                        disp_c6 = savedMultipoleDict.get('C6', None)
+                        disp_c8 = savedMultipoleDict.get('C8', 0.0)
+                        disp_c10 = savedMultipoleDict.get('C10', 0.0)
+                        if disp_c6 is None and classIdx is not None and classIdx in self.dispersionMap:
+                            dParams = self.dispersionMap[classIdx]
+                            disp_c6 = dParams['C6']
+                            disp_c8 = dParams['C8']
+                            disp_c10 = dParams['C10']
+                        if disp_c6 is not None:
+                            force.setDispersionParameters(newIndex, disp_c6, disp_c8, disp_c10)
                     else:
                         raise ValueError("Atom %s of %s %d is out of sync!." %(atom.name, atom.residue.name, atom.residue.index))
                 else:
@@ -1198,7 +1346,61 @@ class MPIDGenerator(object):
             else:
                 raise ValueError('No multipole type for atom %s %s %d' % (atom.name, atom.residue.name, atom.residue.index))
 
+        # Configure dispersion PME if enabled (from XML attributes or ADMPDispPmeForce parser)
+        useDispPME = self.useDispersionPME
+        if 'useDispersionPME' in args:
+            useDispPME = (str(args['useDispersionPME']).lower() in ('true', '1', 'yes'))
+
+        if useDispPME:
+            force.setUseDispersionPME(True)
+            pmax = int(args.get('dispersionPmax', self.dispersionPmax))
+            force.setDispersionPmax(pmax)
+
+            # Dispersion PME grid / alpha (0 = auto from error tolerance)
+            dAlpha = float(args.get('alphaDispersionEwald', 0.0))
+            dGrid = args.get('dispersionPmeGridDimensions', [0, 0, 0])
+            force.setDPMEParameters(dAlpha, int(dGrid[0]), int(dGrid[1]), int(dGrid[2]))
+
+            dispMScales = self.dispMScales
+            if dispMScales is None:
+                dispMScales = [0.0, 0.0, 0.0, 0.0, 1.0]
+            force.setDispMScales(dispMScales)
+
 forcefield.parsers["MPIDForce"] = MPIDGenerator.parseElement
+forcefield.parsers["ADMPPmeForce"] = MPIDGenerator.parseElement
+
+## @private
+## Parser for standalone <ADMPDispPmeForce> elements (DMFF compatibility)
+def _parseADMPDispPmeForce(element, forceField):
+    """Parse a standalone <ADMPDispPmeForce> element and merge parameters into the MPIDGenerator."""
+    existing = [f for f in forceField._forces if isinstance(f, MPIDGenerator)]
+    if len(existing) == 0:
+        # Create a minimal generator so dispersion params are stored for later
+        generator = MPIDGenerator(forceField, None, None, None, None, None)
+        forceField.registerGenerator(generator)
+    else:
+        generator = existing[0]
+
+    # Enable dispersion PME automatically when this tag is present
+    generator.useDispersionPME = True
+
+    # Parse mScale attributes for dispersion
+    keys = ['mScale12', 'mScale13', 'mScale14', 'mScale15', 'mScale16']
+    if element.get('mScale12') is not None:
+        generator.dispMScales = [float(element.get(k, '0.0')) for k in keys]
+
+    # Parse per-atom dispersion parameters
+    for atom in element.findall('Atom'):
+        typeKey = atom.attrib.get('type', atom.attrib.get('class'))
+        if typeKey is None:
+            raise ValueError("ADMPDispPmeForce: <Atom> must have 'type' or 'class' attribute")
+        generator.dispersionMap[typeKey] = {
+            'C6': float(atom.get('C6', 0.0)),
+            'C8': float(atom.get('C8', 0.0)),
+            'C10': float(atom.get('C10', 0.0)),
+        }
+
+forcefield.parsers["ADMPDispPmeForce"] = _parseADMPDispPmeForce
 %}
 
 }

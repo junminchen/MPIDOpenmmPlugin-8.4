@@ -443,6 +443,87 @@ public:
         return nonbondedMethod == MPIDForce::PME;
     }
 
+    // ---- Dispersion PME API ------------------------------------------------
+
+    /**
+     * Get the number of particles that have dispersion parameters defined.
+     * This should equal getNumMultipoles() after all particles are added.
+     */
+    int getNumDispersionParameters() const {
+        return dispersionParams.size();
+    }
+
+    /**
+     * Set the dispersion C6/C8/C10 parameters for a particle.
+     * The values are stored as *susceptibilities* (i.e. sqrt(Cn)) for
+     * combining-rule evaluation: the interaction Cn_ij = ci * cj.
+     *
+     * @param index  the particle index (must already exist via addMultipole)
+     * @param c6     the C6 susceptibility
+     * @param c8     the C8 susceptibility
+     * @param c10    the C10 susceptibility
+     */
+    void setDispersionParameters(int index, double c6, double c8, double c10);
+
+    /**
+     * Get the dispersion C6/C8/C10 parameters for a particle.
+     *
+     * @param index      the particle index
+     * @param[out] c6    the C6 susceptibility
+     * @param[out] c8    the C8 susceptibility
+     * @param[out] c10   the C10 susceptibility
+     */
+    void getDispersionParameters(int index, double& c6, double& c8, double& c10) const;
+
+    /**
+     * Enable or disable the dispersion PME long-range correction.
+     */
+    void setUseDispersionPME(bool use);
+
+    /**
+     * Query whether dispersion PME is enabled.
+     */
+    bool getUseDispersionPME() const;
+
+    /**
+     * Set the maximum order of the dispersion expansion (6, 8, or 10).
+     */
+    void setDispersionPmax(int pmax);
+
+    /**
+     * Get the maximum order of the dispersion expansion.
+     */
+    int getDispersionPmax() const;
+
+    /**
+     * Set the PME parameters for dispersion.
+     * If alpha is 0, values will be auto-determined from the Ewald error tolerance.
+     *
+     * @param alpha  the Ewald separation parameter for dispersion
+     * @param dnx    number of grid points along X (0 = match electrostatic grid)
+     * @param dny    number of grid points along Y
+     * @param dnz    number of grid points along Z
+     */
+    void setDPMEParameters(double alpha, int dnx, int dny, int dnz);
+
+    /**
+     * Get the PME parameters for dispersion.
+     */
+    void getDPMEParameters(double& alpha, int& dnx, int& dny, int& dnz) const;
+
+    /**
+     * Set topological scaling factors for dispersion (1-2 through 1-6+).
+     * The input vector must have exactly 5 entries.
+     */
+    void setDispMScales(const std::vector<double>& scales);
+
+    /**
+     * Get topological scaling factors for dispersion (1-2 through 1-6+).
+     */
+    void getDispMScales(std::vector<double>& scales) const;
+
+    // ---- End Dispersion PME API --------------------------------------------
+
     /**
      * Set the legacy default Thole width parameter.
      *
@@ -523,8 +604,18 @@ private:
     double scalingDistanceCutoff;
     double electricConstant;
     double ewaldErrorTol;
+
+    // Dispersion PME state
+    bool useDispersionPme;
+    int dispersionPmax;
+    double alphaDisp;
+    int dnx, dny, dnz;
+    std::vector<double> dispMScales;
+
     class MultipoleInfo;
+    class DispersionInfo;
     std::vector<MultipoleInfo> multipoles;
+    std::vector<DispersionInfo> dispersionParams;
 };
 
 /**
@@ -569,6 +660,17 @@ public:
 
        dampingFactor = pow((alphas[0]+alphas[1]+alphas[2])/3.0, 1.0/6.0);
     }
+};
+
+/**
+ * This is an internal class used to record dispersion parameters for a particle.
+ * @private
+ */
+class MPIDForce::DispersionInfo {
+public:
+    double c6, c8, c10;
+    DispersionInfo() : c6(0.0), c8(0.0), c10(0.0) {}
+    DispersionInfo(double c6, double c8, double c10) : c6(c6), c8(c8), c10(c10) {}
 };
 
 } // namespace OpenMM

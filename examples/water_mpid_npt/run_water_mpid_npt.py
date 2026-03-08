@@ -91,8 +91,8 @@ def main():
             trace_third = (qxx + qyy + qzz) / 3.0
             quad = [float(qxx-trace_third), float(qxy), float(qyy-trace_third), 
                     float(qxz), float(qyz), float(qzz-trace_third)]
-            if atom.name == "O": axis_type, z, x, y = 4, h1.index, h2.index, -1
-            else: axis_type, z, x, y = 0, o_atom.index, (h2.index if atom == h1 else h1.index), -1
+            if atom.name == "O": axis_type, z, x, y = 1, h1.index, h2.index, -1  # Bisector=1
+            else: axis_type, z, x, y = 0, o_atom.index, (h2.index if atom == h1 else h1.index), -1  # ZThenX=0
             mpid_force.addMultipole(charge, dipole, quad, [0.0]*10, axis_type, z, x, y, 
                                     float(pol['thole']), [float(pol['polarizabilityXX'])]*3)
             mpid_force.setCovalentMap(i, mpidplugin.MPIDForce.Covalent12, [idx for idx in [o_atom.index, h1.index, h2.index] if idx != i])

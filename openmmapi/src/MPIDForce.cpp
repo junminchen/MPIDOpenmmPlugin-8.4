@@ -51,7 +51,8 @@ void validateScaleVector(const vector<double>& scales, const string& name) {
 MPIDForce::MPIDForce() : nonbondedMethod(NoCutoff), polarizationType(Extrapolated), pmeBSplineOrder(6), cutoffDistance(1.0), ewaldErrorTol(5e-4), mutualInducedMaxIterations(60),
                                                mutualInducedTargetEpsilon(1.0e-5), scalingDistanceCutoff(100.0), electricConstant(138.9354558456), defaultThole(5.0),
                                                alpha(0.0), nx(0), ny(0), nz(0), scaleFactor14(1.0),
-                                               mScales(5), pScales(5), dScales(5) {
+                                               mScales(5), pScales(5), dScales(5),
+                                               useDispersionPme(false), dispersionPmax(10), alphaDisp(0.0), dnx(0), dny(0), dnz(0), dispMScales(5) {
     extrapolationCoefficients.push_back(-0.154);
     extrapolationCoefficients.push_back(0.017);
     extrapolationCoefficients.push_back(0.658);
@@ -71,6 +72,11 @@ MPIDForce::MPIDForce() : nonbondedMethod(NoCutoff), polarizationType(Extrapolate
     dScales[2] = 1.0;
     dScales[3] = 1.0;
     dScales[4] = 1.0;
+    dispMScales[0] = 0.0;
+    dispMScales[1] = 0.0;
+    dispMScales[2] = 0.0;
+    dispMScales[3] = 0.0;
+    dispMScales[4] = 1.0;
 }
 
 MPIDForce::NonbondedMethod MPIDForce::getNonbondedMethod() const {
@@ -219,6 +225,7 @@ int MPIDForce::addMultipole(double charge, const std::vector<double>& molecularD
                                        const std::vector<double>& molecularOctopole, int axisType, int multipoleAtomZ, int multipoleAtomX,
                                        int multipoleAtomY, double thole, const std::vector<double>& alphas) {
     multipoles.push_back(MultipoleInfo(charge, molecularDipole, molecularQuadrupole,  molecularOctopole, axisType, multipoleAtomZ,  multipoleAtomX, multipoleAtomY, thole, alphas));
+    dispersionParams.push_back(DispersionInfo());
     return multipoles.size()-1;
 }
 
@@ -332,4 +339,61 @@ ForceImpl* MPIDForce::createImpl()  const {
 
 void MPIDForce::updateParametersInContext(Context& context) {
     dynamic_cast<MPIDForceImpl&>(getImplInContext(context)).updateParametersInContext(getContextImpl(context));
+}
+
+// --------------- Dispersion PME implementation ----------------------------
+
+void MPIDForce::setDispersionParameters(int index, double c6, double c8, double c10) {
+    if (index < 0 || index >= (int) dispersionParams.size())
+        throw OpenMMException("MPIDForce: dispersion parameter index out of range");
+    dispersionParams[index] = DispersionInfo(c6, c8, c10);
+}
+
+void MPIDForce::getDispersionParameters(int index, double& c6, double& c8, double& c10) const {
+    if (index < 0 || index >= (int) dispersionParams.size())
+        throw OpenMMException("MPIDForce: dispersion parameter index out of range");
+    c6  = dispersionParams[index].c6;
+    c8  = dispersionParams[index].c8;
+    c10 = dispersionParams[index].c10;
+}
+
+void MPIDForce::setUseDispersionPME(bool use) {
+    useDispersionPme = use;
+}
+
+bool MPIDForce::getUseDispersionPME() const {
+    return useDispersionPme;
+}
+
+void MPIDForce::setDispersionPmax(int pmax) {
+    if (pmax != 6 && pmax != 8 && pmax != 10)
+        throw OpenMMException("MPIDForce: dispersionPmax must be 6, 8, or 10");
+    dispersionPmax = pmax;
+}
+
+int MPIDForce::getDispersionPmax() const {
+    return dispersionPmax;
+}
+
+void MPIDForce::setDPMEParameters(double alpha, int dnx, int dny, int dnz) {
+    this->alphaDisp = alpha;
+    this->dnx = dnx;
+    this->dny = dny;
+    this->dnz = dnz;
+}
+
+void MPIDForce::getDPMEParameters(double& alpha, int& dnx, int& dny, int& dnz) const {
+    alpha = this->alphaDisp;
+    dnx = this->dnx;
+    dny = this->dny;
+    dnz = this->dnz;
+}
+
+void MPIDForce::setDispMScales(const vector<double>& scales) {
+    validateScaleVector(scales, "dispMScales");
+    dispMScales = scales;
+}
+
+void MPIDForce::getDispMScales(vector<double>& scales) const {
+    scales = dispMScales;
 }

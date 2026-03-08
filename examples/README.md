@@ -42,3 +42,11 @@ water_short_range_md
 A minimal water MD example that builds a normal OpenMM water system and then
 injects the DMFF-style short-range custom terms through the reusable Python
 builder module. It can run on `Reference` or `CUDA`.
+
+water_mpid_npt
+---------------------------------
+A short NPT water-box simulation that converts a DMFF `ADMPPmeForce` XML into
+an OpenMM-readable `MPIDForce` XML at runtime, then adds the DMFF short-range
+terms programmatically and runs on `CUDA`, `CPU`, or `Reference`. The folder
+also bundles the water `PDB/XML` inputs and a reference-comparison script for
+the `CMD_H2O` output.
