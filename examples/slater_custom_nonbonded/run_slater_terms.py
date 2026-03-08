@@ -7,8 +7,10 @@ import argparse
 import math
 import xml.etree.ElementTree as ET
 from collections import deque
+from pathlib import Path
 
 import openmm as mm
+import openmm.app as app
 from openmm import unit
 
 DIELECTRIC = 1389.35455846
@@ -40,6 +42,53 @@ def parse_dmff_sr_xml(xml_path):
     root = ET.parse(xml_path).getroot()
     return {force_name: parse_force_section(root, force_name) for force_name in TERM_ORDER}
 
+
+
+
+def parse_residue_templates(root):
+    templates = {}
+    residues = root.find("Residues")
+    if residues is None:
+        return templates
+    for residue in residues.findall("Residue"):
+        atoms = []
+        for atom in residue.findall("Atom"):
+            atoms.append((atom.attrib["name"], atom.attrib["type"]))
+        bonds = []
+        for bond in residue.findall("Bond"):
+            bonds.append((int(bond.attrib["from"]), int(bond.attrib["to"])))
+        templates[residue.attrib["name"]] = {"atoms": atoms, "bonds": bonds}
+    return templates
+
+
+def load_pdb_types_and_bonds(pdb_path, xml_path):
+    pdb = app.PDBFile(pdb_path)
+    root = ET.parse(xml_path).getroot()
+    templates = parse_residue_templates(root)
+    atom_types = []
+    bonds = set()
+    atom_index_map = {}
+    index = 0
+    for residue in pdb.topology.residues():
+        if residue.name not in templates:
+            raise ValueError(f"Residue {residue.name} not found in XML template section")
+        template = templates[residue.name]
+        by_name = {name: atom_type for name, atom_type in template["atoms"]}
+        residue_atoms = list(residue.atoms())
+        for atom in residue_atoms:
+            if atom.name not in by_name:
+                raise ValueError(f"Atom {atom.name} in residue {residue.name} not found in XML template")
+            atom_types.append(by_name[atom.name])
+            atom_index_map[(residue.index, atom.name)] = index
+            index += 1
+        for i, j in template["bonds"]:
+            global_i = atom_index_map[(residue.index, residue_atoms[i].name)]
+            global_j = atom_index_map[(residue.index, residue_atoms[j].name)]
+            bonds.add(tuple(sorted((global_i, global_j))))
+    for bond in pdb.topology.bonds():
+        bonds.add(tuple(sorted((bond[0].index, bond[1].index))))
+    positions_nm = pdb.positions.value_in_unit(unit.nanometer)
+    return atom_types, sorted(bonds), positions_nm
 
 def shortest_bond_separations(num_atoms, bonds, max_sep=5):
     graph = [[] for _ in range(num_atoms)]
@@ -290,6 +339,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--xml", default="examples/slater_custom_nonbonded/slater_terms.xml", help="DMFF-style XML containing the short-range sections.")
     parser.add_argument("--topology", choices=["dimer", "chain7"], default="chain7", help="Built-in topology used by the example.")
+    parser.add_argument("--pdb", help="Optional PDB file for a real-structure evaluation. Requires residue templates in the XML.")
     parser.add_argument("--types", nargs="+", help="Override atom types; must match the chosen topology atom count.")
     parser.add_argument("--r-start", type=float, default=0.20, help="Start spacing in nm.")
     parser.add_argument("--r-stop", type=float, default=0.50, help="Stop spacing in nm.")
@@ -297,34 +347,47 @@ def main():
     parser.add_argument("--compare-dmff", action="store_true", help="Also evaluate the same terms with DMFF kernels and print deltas.")
     args = parser.parse_args()
 
-    atom_types = args.types if args.types is not None else default_types(args.topology)
-    bonds = default_bonds(args.topology)
-    expected_atoms = 2 if args.topology == "dimer" else 7
-    if len(atom_types) != expected_atoms:
-        raise ValueError(f"Topology {args.topology} expects {expected_atoms} atom types, got {len(atom_types)}")
-
     force_data = parse_dmff_sr_xml(args.xml)
+    if args.pdb:
+        atom_types, bonds, fixed_positions_nm = load_pdb_types_and_bonds(args.pdb, args.xml)
+    else:
+        atom_types = args.types if args.types is not None else default_types(args.topology)
+        bonds = default_bonds(args.topology)
+        expected_atoms = 2 if args.topology == "dimer" else 7
+        if len(atom_types) != expected_atoms:
+            raise ValueError(f"Topology {args.topology} expects {expected_atoms} atom types, got {len(atom_types)}")
+        fixed_positions_nm = None
+
     system = build_system(atom_types, bonds, force_data)
     integrator = mm.VerletIntegrator(1.0 * unit.femtosecond)
     context = mm.Context(system, integrator, mm.Platform.getPlatformByName("Reference"))
 
-    header = ["r_nm"] + TERM_ORDER
+    header = (["frame"] if args.pdb else ["r_nm"]) + TERM_ORDER
     if args.compare_dmff:
         header += [name + "_delta" for name in TERM_ORDER]
     print(" ".join(header))
 
-    r_value = args.r_start
-    while r_value <= args.r_stop + 1e-12:
-        positions_nm = build_positions(args.topology, r_value)
-        positions = unit.Quantity(positions_nm, unit.nanometer)
-        context.setPositions(positions)
+    if args.pdb:
+        context.setPositions(unit.Quantity(fixed_positions_nm, unit.nanometer))
         omm_energies = {name: energy_by_group(context, idx) for idx, name in enumerate(TERM_ORDER)}
-        row = [f"{r_value:.3f}"] + [f"{omm_energies[name]:.12f}" for name in TERM_ORDER]
+        row = [Path(args.pdb).name] + [f"{omm_energies[name]:.12f}" for name in TERM_ORDER]
         if args.compare_dmff:
-            ref = dmff_reference_energies(force_data, atom_types, bonds, positions_nm)
+            ref = dmff_reference_energies(force_data, atom_types, bonds, fixed_positions_nm)
             row += [f"{(omm_energies[name] - ref[name]):.12e}" for name in TERM_ORDER]
         print(" ".join(row))
-        r_value += args.r_step
+    else:
+        r_value = args.r_start
+        while r_value <= args.r_stop + 1e-12:
+            positions_nm = build_positions(args.topology, r_value)
+            positions = unit.Quantity(positions_nm, unit.nanometer)
+            context.setPositions(positions)
+            omm_energies = {name: energy_by_group(context, idx) for idx, name in enumerate(TERM_ORDER)}
+            row = [f"{r_value:.3f}"] + [f"{omm_energies[name]:.12f}" for name in TERM_ORDER]
+            if args.compare_dmff:
+                ref = dmff_reference_energies(force_data, atom_types, bonds, positions_nm)
+                row += [f"{(omm_energies[name] - ref[name]):.12e}" for name in TERM_ORDER]
+            print(" ".join(row))
+            r_value += args.r_step
 
 
 if __name__ == "__main__":

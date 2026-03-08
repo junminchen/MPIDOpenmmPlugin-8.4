@@ -60,6 +60,16 @@ conda run --no-capture-output -n mpid \
   --compare-dmff
 ```
 
+To evaluate a real PDB frame using residue-to-type mapping from the XML:
+
+```bash
+conda run --no-capture-output -n mpid \
+  python examples/slater_custom_nonbonded/run_slater_terms.py \
+  --pdb examples/slater_custom_nonbonded/te1_in1_dimer.pdb \
+  --xml examples/slater_custom_nonbonded/slater_real_structure.xml \
+  --compare-dmff
+```
+
 Notes
 -----
 - The formulas follow the DMFF implementation in `dmff/admp/pairwise.py`.
