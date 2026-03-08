@@ -826,13 +826,16 @@ class MPIDGenerator(object):
         multipole_elements = element.findall('Multipole') + element.findall('Atom')
 
         for atom in multipole_elements:
-            types = forceField._findAtomTypes(atom.attrib, 1)
-            if None in types:
-                # Fallback: try 'class' attribute as 'type' for DMFF compatibility
-                alt_attrib = dict(atom.attrib)
-                if 'class' in alt_attrib and 'type' not in alt_attrib:
-                    alt_attrib['type'] = alt_attrib.pop('class')
-                types = forceField._findAtomTypes(alt_attrib, 1)
+            # Build a clean attrib dict: if both 'class' and 'type' present,
+            # strip 'class' to avoid _findAtomTypes ValueError;
+            # if only 'class' present, rename it to 'type'.
+            clean_attrib = dict(atom.attrib)
+            if 'class' in clean_attrib:
+                if 'type' in clean_attrib:
+                    del clean_attrib['class']
+                else:
+                    clean_attrib['type'] = clean_attrib.pop('class')
+            types = forceField._findAtomTypes(clean_attrib, 1)
             if None not in types:
 
                 # Determine the type/class key used for atom matching
@@ -911,12 +914,13 @@ class MPIDGenerator(object):
         # polarization parameters
 
         for atom in element.findall('Polarize'):
-            types = forceField._findAtomTypes(atom.attrib, 1)
-            if None in types:
-                alt_attrib = dict(atom.attrib)
-                if 'class' in alt_attrib and 'type' not in alt_attrib:
-                    alt_attrib['type'] = alt_attrib.pop('class')
-                types = forceField._findAtomTypes(alt_attrib, 1)
+            clean_attrib = dict(atom.attrib)
+            if 'class' in clean_attrib:
+                if 'type' in clean_attrib:
+                    del clean_attrib['class']
+                else:
+                    clean_attrib['type'] = clean_attrib.pop('class')
+            types = forceField._findAtomTypes(clean_attrib, 1)
             if None not in types:
 
                 classIndex = atom.attrib.get('type', atom.attrib.get('class'))
