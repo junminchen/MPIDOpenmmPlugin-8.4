@@ -61,7 +61,7 @@ def main():
     system = ff.createSystem(
         pdb.topology,
         nonbondedMethod=app.PME,
-        nonbondedCutoff=0.6 * unit.nanometer,
+        nonbondedCutoff=0.8 * unit.nanometer,
         constraints=None,
         rigidWater=False,
         polarization="extrapolated",
@@ -76,8 +76,10 @@ def main():
     )
 
     # ── Add undamped C6/C8/C10 dispersion with long-range correction ──
+    # cutoff must match the nonbondedCutoff used above
+    cutoff_nm = 0.8
     add_undamped_dispersion_force(
-        system, pdb.topology, str(dmff_xml), cutoff_nm=0.6,
+        system, pdb.topology, str(dmff_xml), cutoff_nm=cutoff_nm,
     )
 
     # Assign each force to its own group for energy breakdown
