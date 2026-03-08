@@ -158,6 +158,24 @@ def make_nonbonded_force(force_name):
     return force
 
 
+def configure_short_range_nonbonded_method(force, system):
+    for parent_force in system.getForces():
+        if isinstance(parent_force, mm.NonbondedForce):
+            method = parent_force.getNonbondedMethod()
+            if method in (mm.NonbondedForce.PME, mm.NonbondedForce.CutoffPeriodic, mm.NonbondedForce.LJPME, mm.NonbondedForce.Ewald):
+                force.setNonbondedMethod(mm.CustomNonbondedForce.CutoffPeriodic)
+                force.setCutoffDistance(parent_force.getCutoffDistance())
+                if hasattr(parent_force, "getUseSwitchingFunction") and parent_force.getUseSwitchingFunction():
+                    force.setUseSwitchingFunction(True)
+                    force.setSwitchingDistance(parent_force.getSwitchingDistance())
+            elif method == mm.NonbondedForce.CutoffNonPeriodic:
+                force.setNonbondedMethod(mm.CustomNonbondedForce.CutoffNonPeriodic)
+                force.setCutoffDistance(parent_force.getCutoffDistance())
+            else:
+                force.setNonbondedMethod(mm.CustomNonbondedForce.NoCutoff)
+            return
+
+
 def bond_energy_expression(force_name):
     if force_name == "QqTtDampingForce":
         return "scale*(-0.1*dielectric*qij*exp(-bij*r)*(1+bij*r)/r)"
@@ -276,6 +294,7 @@ def add_dmff_short_range_forces(system, atom_types, bonds, force_data, start_gro
     for group_offset, force_name in enumerate(TERM_ORDER):
         section = force_data[force_name]
         nb_force = make_nonbonded_force(force_name)
+        configure_short_range_nonbonded_method(nb_force, system)
         bond_force = make_bond_force(force_name)
         for atom_type in atom_types:
             nb_force.addParticle(particle_params(force_name, section, atom_type))
