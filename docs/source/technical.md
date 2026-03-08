@@ -95,24 +95,25 @@ $$
  1 - e^{-a u}(1 + au + \frac{(a u)^2}{2}).
 $$
 
-For [MPID](https://doi.org/10.1063/1.4984113), the dimensionless distance for a
-pair of interacting atoms $i$ and $j$ is given by their separation, $R_{ij}$,
-and the individual atomic polarizabilities $\alpha_i$ and $\alpha_j$ by
+For the current DMFF-compatible damping used in this plugin, the dimensionless
+distance for a pair of interacting atoms $i$ and $j$ is given by their
+separation, $R_{ij}$, and the individual atomic polarizabilities
+$\alpha_i$ and $\alpha_j$ by
 
 $$
- u = \frac{R_{ij}}{\alpha_i\alpha_j}.
+ u = \frac{R_{ij}}{(\alpha_i\alpha_j)^{1/6}}.
 $$
 
 If the polarizability of and atom is anisotropic, the average of the three
-diagonal tensor elements is used.  The dimensionless width parameter $a$ is
-given a default value that is used for any interaction that is not excluded
-(1-2, 1-3 and, if `coulomb14scale` is zero, 1-4 connected pairs); this default
-value is controlled by the `defaultTholeWidth` argument to either the XML force
-field file or `createSystem()`.  The excluded interactions do not contribute to
-permanent-permenent moment interactions, or to forming the electric field
-$\mathbf{E}$ used to define the induced dipoles.  For `mutual` and
-`extrapolated` solvers, the induced dipoles are allowed to interact with each
-other.  These interactions are not subject to excluded rules.  For pairs that
-are not excluded due to topology, the `defaultTholeWidth` parameter is used to
-define $a$.  For pairs that are excluded due to topology, we use the individual
-Thole widths defined in the parameter file and define $a=a_i + a_j$.
+diagonal tensor elements is used.  The dimensionless width parameter is taken
+from the per-site Thole coefficients as
+
+$$
+ a = \min(a_i, a_j),
+$$
+
+and the damping is applied in terms of $a u^3$.  The topological `pScale` and
+`dScale` parameters scale the damped interaction tensors, but they do not
+change how $a$ is chosen.  The legacy `defaultTholeWidth` argument is retained
+for API/XML compatibility, but it is not used in the current DMFF-compatible
+damping path.

@@ -576,12 +576,15 @@ public:
     }
 
     /**
-     * Set the default Thole width (in nm) used for "direct" pairs.
+     * Set the legacy default Thole width parameter.
+     *
+     * This is retained for XML/API compatibility, but the current
+     * DMFF-compatible damping logic uses per-site thole values directly.
      */
     void setDefaultTholeWidth(double val);
 
     /**
-     * Get the default Thole width (in nm) used for "direct" pairs.
+     * Get the legacy default Thole width parameter.
      */
     double getDefaultTholeWidth() const;
 

@@ -444,12 +444,15 @@ public:
     }
 
     /**
-     * Set the default Thole width (in nm) used for "direct" pairs.
+     * Set the legacy default Thole width parameter.
+     *
+     * This value is retained for XML/API compatibility, but the current
+     * damping logic uses the per-site thole parameters directly.
      */
     void setDefaultTholeWidth(double val);
 
     /**
-     * Get the default Thole width (in nm) used for "direct" pairs.
+     * Get the legacy default Thole width parameter.
      */
     double getDefaultTholeWidth() const;
 

@@ -858,8 +858,8 @@ void MPIDReferenceForce::getAndScaleInverseRs(double dampI, double dampJ, double
     if (damp != 0.0) {
         double ratio   = (r/damp);
 
-        double pgamma  = pscale == 0.0 ? tholeI + tholeJ : _defaultTholeWidth;
-               damp    = pgamma*ratio;
+        double pgamma  = (tholeI < tholeJ ? tholeI : tholeJ);
+               damp    = pgamma*ratio*ratio*ratio;
         if (damp < 50.0) {
             double expdamp = exp(-damp);
             rrI[0] *= 1.0 - expdamp*(1.0 + damp + 0.5*damp*damp);
@@ -1509,31 +1509,28 @@ double MPIDReferenceForce::calculateElectrostaticPairIxn(const MultipoleParticle
     double uScale = 1.0;
 
     double dmp = particleI.dampingFactor*particleJ.dampingFactor;
-    double a = pScale == 0.0 ? particleI.thole + particleJ.thole : _defaultTholeWidth;
+    double a = (particleI.thole < particleJ.thole ? particleI.thole : particleJ.thole);
     double u = std::abs(dmp) > 1.0E-5 ? r/dmp : 1E10;
-    double au = a*u;
-    double expau = au < 50.0 ? exp(-au) : 0.0;
-    double au2 = au*au;
-    double au3 = au2*au;
-    double au4 = au3*au;
-    double au5 = au4*au;
-    double au6 = au5*au;
+    double au3 = a*u*u*u;
+    double expau = au3 < 50.0 ? exp(-au3) : 0.0;
+    double au4 = au3*au3;
+    double au5 = au4*au3;
     // Thole damping factors for energies
-    double thole_c   = 1.0 - expau*(1.0 + au + 0.5*au2);
-    double thole_d0  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/4.0);
-    double thole_d1  = 1.0 - expau*(1.0 + au + 0.5*au2);
-    double thole_q0  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/18.0);
-    double thole_q1  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0);
-    double thole_o0  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/24.0 + au5/120.0);
-    double thole_o1  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/30.0);
+    double thole_c   = 1.0 - expau;
+    double thole_d0  = 1.0 - expau*(1.0 + 1.5*au3);
+    double thole_d1  = 1.0 - expau;
+    double thole_q0  = 1.0 - expau*(1.0 + au3 + au4);
+    double thole_q1  = 1.0 - expau*(1.0 + au3);
+    double thole_o0  = 1.0 - expau*(1.0 + au3 + au4);
+    double thole_o1  = 1.0 - expau*(1.0 + au3);
     // Thole damping factors for derivatives
-    double dthole_c  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/4.0);
-    double dthole_d0 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/12.0);
-    double dthole_d1 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0);
-    double dthole_q0 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/24.0 + au5/72.0);
-    double dthole_q1 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/24.0);
-    double dthole_o0 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/24.0 + au5/120.0 + au6/600.0);
-    double dthole_o1 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/25.0 + au5/150.0);
+    double dthole_c  = 1.0 - expau*(1.0 + 1.5*au3);
+    double dthole_d0 = 1.0 - expau*(1.0 + au3 + 1.5*au4);
+    double dthole_d1 = 1.0 - expau*(1.0 + au3);
+    double dthole_q0 = 1.0 - expau*(1.0 + au3 + 0.25*au4 + 0.75*au5);
+    double dthole_q1 = 1.0 - expau*(1.0 + au3 + 0.75*au4);
+    double dthole_o0 = dthole_q0;
+    double dthole_o1 = dthole_q1;
     // Now we compute the (attenuated) Coulomb operator and its derivatives, contracted with
     // permanent moments and induced dipoles.  Note that the coefficient of the permanent force
     // terms is half of the expected value; this is because we compute the interaction of I with
@@ -2728,8 +2725,8 @@ void MPIDReferencePmeForce::getDampedInverseDistances(const MultipoleParticleDat
 
         double ratio   = (r/damp);
 
-        double pgamma  = pscale == 0.0 ? particleI.thole + particleJ.thole : _defaultTholeWidth;
-               damp    = pgamma*ratio;
+        double pgamma  = (particleI.thole < particleJ.thole ? particleI.thole : particleJ.thole);
+               damp    = pgamma*ratio*ratio*ratio;
         if (damp < 50.0) {
             double expdamp = exp(-damp);
             scaleFactor[0] = 1.0 - expdamp*(1.0 + damp + 0.5*damp*damp);
@@ -4244,8 +4241,8 @@ void MPIDReferencePmeForce::calculateDirectInducedDipolePairIxns(const Multipole
     if (damp != 0.0) {
 
         double ratio = (r/damp);
-        double pgamma  = pscale == 0.0 ? particleI.thole + particleJ.thole : _defaultTholeWidth;
-               damp    = pgamma*ratio;
+        double pgamma  = (particleI.thole < particleJ.thole ? particleI.thole : particleJ.thole);
+               damp    = pgamma*ratio*ratio*ratio;
         if (damp < 50.0) {
             double expdamp = exp(-damp);
             scale3 = 1.0 - expdamp*(1.0 + damp + 0.5*damp*damp);
@@ -4534,31 +4531,28 @@ double MPIDReferencePmeForce::calculatePmeDirectElectrostaticPairIxn(const Multi
     }
 
     double dmp = particleI.dampingFactor*particleJ.dampingFactor;
-    double a = pScale == 0.0 ? particleI.thole + particleJ.thole : _defaultTholeWidth;
+    double a = (particleI.thole < particleJ.thole ? particleI.thole : particleJ.thole);
     double u = std::abs(dmp) > 1.0E-5 ? r/dmp : 1E10;
-    double au = a*u;
-    double expau = au < 50.0 ? exp(-au) : 0.0;
-    double au2 = au*au;
-    double au3 = au2*au;
-    double au4 = au3*au;
-    double au5 = au4*au;
-    double au6 = au5*au;
+    double au3 = a*u*u*u;
+    double expau = au3 < 50.0 ? exp(-au3) : 0.0;
+    double au4 = au3*au3;
+    double au5 = au4*au3;
     // Thole damping factors for energies
-    double thole_c   = 1.0 - expau*(1.0 + au + 0.5*au2);
-    double thole_d0  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/4.0);
-    double thole_d1  = 1.0 - expau*(1.0 + au + 0.5*au2);
-    double thole_q0  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/18.0);
-    double thole_q1  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0);
-    double thole_o0  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/24.0 + au5/120.0);
-    double thole_o1  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/30.0);
+    double thole_c   = 1.0 - expau;
+    double thole_d0  = 1.0 - expau*(1.0 + 1.5*au3);
+    double thole_d1  = 1.0 - expau;
+    double thole_q0  = 1.0 - expau*(1.0 + au3 + au4);
+    double thole_q1  = 1.0 - expau*(1.0 + au3);
+    double thole_o0  = 1.0 - expau*(1.0 + au3 + au4);
+    double thole_o1  = 1.0 - expau*(1.0 + au3);
     // Thole damping factors for derivatives
-    double dthole_c  = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/4.0);
-    double dthole_d0 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/12.0);
-    double dthole_d1 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0);
-    double dthole_q0 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/24.0 + au5/72.0);
-    double dthole_q1 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/24.0);
-    double dthole_o0 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/24.0 + au5/120.0 + au6/600.0);
-    double dthole_o1 = 1.0 - expau*(1.0 + au + 0.5*au2 + au3/6.0 + au4/25.0 + au5/150.0);
+    double dthole_c  = 1.0 - expau*(1.0 + 1.5*au3);
+    double dthole_d0 = 1.0 - expau*(1.0 + au3 + 1.5*au4);
+    double dthole_d1 = 1.0 - expau*(1.0 + au3);
+    double dthole_q0 = 1.0 - expau*(1.0 + au3 + 0.25*au4 + 0.75*au5);
+    double dthole_q1 = 1.0 - expau*(1.0 + au3 + 0.75*au4);
+    double dthole_o0 = dthole_q0;
+    double dthole_o1 = dthole_q1;
 
     // Now we compute the (attenuated) Coulomb operator and its derivatives, contracted with
     // permanent moments and induced dipoles.  Note that the coefficient of the permanent force

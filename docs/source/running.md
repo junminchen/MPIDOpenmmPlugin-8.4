@@ -104,9 +104,10 @@ The section defining the `MPIDForce` terms looks like this:
 
 The global `coulomb14scale` parameter controls the scale factor applied to
 interactions that are topologically three bonds apart, and defaults to 1 (the
-correct value for MPID) if omitted.  The `defaultTholeWidth` parameter is the
-[Thole damping] (technical.md#thole-damping) parameter that's applied to
-particles whose interaction is not neglected due to topological reasons.
+correct value for MPID) if omitted.  The `defaultTholeWidth` parameter is kept
+for backward-compatible XML/API parsing, but the current DMFF-compatible Thole
+damping uses the per-site `thole` values from `Polarize` records rather than a
+separate default width.
 
 Multipoles are defined by providing orientation rules, defining their
 orientation with respect to "anchor" atoms within the same system and the
