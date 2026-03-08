@@ -57,13 +57,19 @@ def parse_residue_templates(root):
 
 def load_pdb_types_and_bonds(pdb_path, xml_path):
     pdb = app.PDBFile(pdb_path)
+    atom_types, bonds = infer_atom_types_and_bonds_from_topology(pdb.topology, xml_path)
+    positions_nm = pdb.positions.value_in_unit(unit.nanometer)
+    return atom_types, bonds, positions_nm
+
+
+def infer_atom_types_and_bonds_from_topology(topology, xml_path):
     root = ET.parse(xml_path).getroot()
     templates = parse_residue_templates(root)
     atom_types = []
     bonds = set()
     atom_index_map = {}
     index = 0
-    for residue in pdb.topology.residues():
+    for residue in topology.residues():
         if residue.name not in templates:
             raise ValueError(f"Residue {residue.name} not found in XML template section")
         template = templates[residue.name]
@@ -79,10 +85,9 @@ def load_pdb_types_and_bonds(pdb_path, xml_path):
             global_i = atom_index_map[(residue.index, residue_atoms[i].name)]
             global_j = atom_index_map[(residue.index, residue_atoms[j].name)]
             bonds.add(tuple(sorted((global_i, global_j))))
-    for bond in pdb.topology.bonds():
+    for bond in topology.bonds():
         bonds.add(tuple(sorted((bond[0].index, bond[1].index))))
-    positions_nm = pdb.positions.value_in_unit(unit.nanometer)
-    return atom_types, sorted(bonds), positions_nm
+    return atom_types, sorted(bonds)
 
 
 def shortest_bond_separations(num_atoms, bonds, max_sep=5):
@@ -284,6 +289,12 @@ def add_dmff_short_range_forces(system, atom_types, bonds, force_data, start_gro
         system.addForce(nb_force)
         system.addForce(bond_force)
     return system
+
+
+def add_dmff_short_range_forces_from_xml(system, topology, xml_path, start_group=0):
+    atom_types, bonds = infer_atom_types_and_bonds_from_topology(topology, xml_path)
+    force_data = parse_dmff_sr_xml(xml_path)
+    return add_dmff_short_range_forces(system, atom_types, bonds, force_data, start_group=start_group)
 
 
 def build_system(atom_types, bonds, force_data, particle_mass=39.9):

@@ -36,3 +36,9 @@ A self-contained example that reproduces the DMFF short-range custom terms with
 OpenMM `CustomNonbondedForce`, including `QqTtDampingForce`, exchange,
 short-range electrostatics, short-range polarization, short-range dispersion,
 DHF, and Slater dispersion damping.
+
+water_short_range_md
+---------------------------------
+A minimal water MD example that builds a normal OpenMM water system and then
+injects the DMFF-style short-range custom terms through the reusable Python
+builder module. It can run on `Reference` or `CUDA`.
