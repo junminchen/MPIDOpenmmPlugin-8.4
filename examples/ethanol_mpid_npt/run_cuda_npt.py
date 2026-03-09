@@ -38,7 +38,7 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--steps",           type=int,   default=400000, help="MD steps (default: 400000 = 200 ps at 0.5 fs)")
     parser.add_argument("--platform",        default="CUDA", choices=["CUDA", "Reference", "CPU"])
-    parser.add_argument("--dt",              type=float, default=0.5,   help="Timestep in fs (default: 0.5)")
+    parser.add_argument("--dt",              type=float, default=1.0,   help="Timestep in fs (default: 1.0)")
     parser.add_argument("--temperature",     type=float, default=298.15,help="Temperature in K (default: 298.15)")
     parser.add_argument("--pressure",        type=float, default=1.0,   help="Pressure in atm (default: 1.0)")
     parser.add_argument("--pdb",             default="ethanol_100mol.pdb", help="Input PDB file")
@@ -61,7 +61,7 @@ def main():
         pdb.topology,
         nonbondedMethod=app.PME,
         nonbondedCutoff=0.9 * unit.nanometer,
-        constraints=None,
+        constraints=app.HBonds,   # constrain C-H/O-H; allows 1 fs timestep
         rigidWater=False,
         polarization="extrapolated",
     )
