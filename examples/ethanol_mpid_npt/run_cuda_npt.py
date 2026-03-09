@@ -139,22 +139,7 @@ def main():
     min_e = state.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)
     print(f"  After minimization: {min_e:.4f} kJ/mol")
 
-    # Set velocities AFTER minimization; use 10 K for gentle pre-equilibration
-    # to avoid crashing with large forces from residual close contacts.
-    simulation.context.setVelocitiesToTemperature(10 * unit.kelvin)
-
-    # Short pre-equilibration ramp: 10 K → 100 K → 298 K, all at small dt
-    print("  Pre-equilibrating (10K→298K)...")
-    integrator.setStepSize(0.0001 * unit.picosecond)
-    for T_ramp in [10, 50, 100, 200, 298.15]:
-        integrator.setTemperature(T_ramp * unit.kelvin)
-        simulation.context.setVelocitiesToTemperature(T_ramp * unit.kelvin)
-        simulation.step(500)
-    integrator.setTemperature(temperature)
-    integrator.setStepSize(dt)
-    state = simulation.context.getState(getEnergy=True)
-    pre_e = state.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)
-    print(f"  After pre-equilibration: {pre_e:.4f} kJ/mol")
+    simulation.context.setVelocitiesToTemperature(temperature)
 
     total_time_ps = args.steps * args.dt / 1000.0
     print(f"\nRunning {args.steps} steps ({total_time_ps:.1f} ps)...")
