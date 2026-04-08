@@ -15,7 +15,7 @@ pdb = PDBFile('waterdimer_aligned.pdb')
 forcefield = ForceField('charmm_polar_2019.xml')
 modeller = Modeller(pdb.topology, pdb.positions)
 modeller.addExtraParticles(forcefield)
-system = forcefield.createSystem(modeller.topology, nonbondedMethod=LJPME, nonbondedCutoff=8*angstrom, constraints=HBonds)
+system = forcefield.createSystem(modeller.topology, nonbondedMethod=PME, nonbondedCutoff=8*angstrom, constraints=HBonds)
 integrator = DrudeSCFIntegrator(1e-10*femtoseconds)
 integrator.setMinimizationErrorTolerance(1e-12)
 

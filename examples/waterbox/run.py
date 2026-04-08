@@ -12,8 +12,9 @@ pdb = PDBFile('waterbox_31ang.pdb')
 #forcefield = ForceField('../parameters/tip3p.xml')
 #forcefield = ForceField('../parameters/swm4.xml')
 forcefield = ForceField('../parameters/swm6.xml')
-system = forcefield.createSystem(pdb.topology, nonbondedMethod=LJPME, nonbondedCutoff=8*angstrom, constraints=HBonds,
-                                 defaultTholeWidth=8)
+#system = forcefield.createSystem(pdb.topology, nonbondedMethod=LJPME,nonbondedCutoff=8*angstrom, constraints=HBonds,defaultTholeWidth=8)
+system = forcefield.createSystem(pdb.topology, nonbondedMethod=LJPME,polarization="extrapolated",nonbondedCutoff=8*angstrom, constraints=HBonds,defaultTholeWidth=8)
+#system = forcefield.createSystem(pdb.topology, nonbondedMethod=LJPME, nonbondedCutoff=8*angstrom, constraints=HBonds)
 integrator = LangevinIntegrator(300*kelvin, 1/picosecond, 2*femtoseconds)
 system.addForce(MonteCarloBarostat(1*atmosphere, 300*kelvin, 25))
 
@@ -40,13 +41,35 @@ context = simulation.context
 if pdb.topology.getPeriodicBoxVectors():
     context.setPeriodicBoxVectors(*pdb.topology.getPeriodicBoxVectors())
 
-if os.path.isfile('restart.xml'):
-    simulation.loadState('restart.xml')
+#if os.path.isfile('restart.xml'):
+#    simulation.loadState('restart.xml')
 
 print("Running on ", context.getPlatform().getName(), " Device ID:", deviceid)
 
 # Initialize
 context.setPositions(pdb.positions)
+
+# NO step - just get initial energy
+# integrator.step(1)
+
+# Print energy components of initial state
+print("\n=== Energy Components (Initial, Step 0) ===")
+state = context.getState(getEnergy=True, getForces=True)
+print(f"Total potential energy: {state.getPotentialEnergy()}")
+print(f"Total kinetic energy: {state.getKineticEnergy()}")
+
+# Try using ForceGroups instead
+print("\n--- Using ForceGroups ---")
+# Disable all forces first, then enable one at a time
+for i in range(system.getNumForces()):
+    force = system.getForce(i)
+    force.setForceGroup(i)
+
+# Get energy for each force group
+for i in range(system.getNumForces()):
+    state = context.getState(getEnergy=True, groups={i})
+    energy = state.getPotentialEnergy()
+    print(f"Group {i} ({type(system.getForce(i)).__name__}): {energy}")
 
 nsteps = 50000
 

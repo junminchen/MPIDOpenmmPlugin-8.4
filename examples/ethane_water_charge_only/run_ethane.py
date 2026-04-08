@@ -3,6 +3,7 @@ from openmm import *
 from openmm.unit import *
 import openmm.app.element as elem
 from sys import stdout, argv
+import os
 import mpidplugin
 import numpy as np
 from mdtraj.reporters import NetCDFReporter
@@ -47,9 +48,11 @@ if os.path.isfile('equilibrated.xml'):
 
 # Dump trajectory info every 10ps
 #simulation.reporters.append(DCDReporter('trajectory.dcd', 5000))
-simulation.reporters.append(NetCDFReporter('trajectory.nc', 5000))
-nsteps = 250000
-simulation.reporters.append(StateDataReporter(stdout, 500, totalSteps=nsteps, speed=True, volume=True, density=True,
+nsteps = int(os.environ.get('ETHANE_NSTEPS', '250000'))
+traj_interval = min(5000, max(1, nsteps))
+state_interval = min(500, max(1, nsteps))
+simulation.reporters.append(NetCDFReporter('trajectory.nc', traj_interval))
+simulation.reporters.append(StateDataReporter(stdout, state_interval, totalSteps=nsteps, speed=True, volume=True, density=True,
                             step=True, potentialEnergy=True, totalEnergy=True, temperature=True))
 simulation.reporters.append(PDBReporter('equilibrated.pdb', nsteps))
 # Run 0.5ns of simulation
